@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Registros</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            height: 400px;
+            width: 100%;
+        }
+        .input-reduzido {
+            max-width: 200px;
+        }
+        @media (min-width: 768px) {
+            .input-reduzido {
+                max-width: 180px;
+            }
+        }
+        select:disabled {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-start min-h-screen p-4">
+    <div class="container p-8 rounded-lg w-full max-w-4xl flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Gráfico de Registros</h1>
+
+        <form id="filtroForm" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 items-end justify-center">
+            <div class="flex flex-col items-center">
+                <label for="funcao" class="block text-xs font-medium text-gray-700 mb-1">Função:</label>
+                <select id="funcao" name="funcao" class="input-reduzido w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Todas</option>
+                    <option value="estudante">Estudante</option>
+                    <option value="funcionario">Funcionário</option>
+                    <option value="convidado">Convidado</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col items-center">
+                <label for="turma" class="block text-xs font-medium text-gray-700 mb-1">Turma:</label>
+                <select id="turma" name="turma" class="input-reduzido w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Todas</option>
+                    <option value="Informática">Informática</option>
+                    <option value="Segurança do Trabalho">Segurança do Trabalho</option>
+                    <option value="Massoterapia">Massoterapia</option>
+                    <option value="Estética">Estética</option>
+                    <option value="Administração">Administração</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col items-center">
+                <button type="submit" class="input-reduzido w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 px-3 text-sm rounded-md shadow-sm transition duration-300 ease-in-out transform hover:scale-105">
+                    Filtrar
+                </button>
+            </div>
+        </form>
+
+        <!-- Contador de total adicionado aqui -->
+        <div id="totalRegistros" class="text-xl font-semibold text-gray-700 mb-4">
+            Total: 0
+        </div>
+
+        <div class="chart-container mx-auto w-full max-w-2xl">
+            <canvas id="graficoPizza"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('graficoPizza').getContext('2d');
+        let grafico;
+
+        // Função para atualizar o contador de total
+        function atualizarTotal(total) {
+            document.getElementById('totalRegistros').textContent = `Total: ${total}`;
+        }
+
+        // Função para controlar o estado das opções de turma
+        function controlarTurma() {
+            const funcaoSelecionada = document.getElementById('funcao').value;
+            const selectTurma = document.getElementById('turma');
+            const opcoesTurma = selectTurma.options;
+            
+            if (funcaoSelecionada === 'convidado' || funcaoSelecionada === 'funcionario') {
+                for (let i = 0; i < opcoesTurma.length; i++) {
+                    opcoesTurma[i].disabled = opcoesTurma[i].value !== '';
+                }
+                if (selectTurma.value !== '') {
+                    selectTurma.value = '';
+                }
+            } else {
+                for (let i = 0; i < opcoesTurma.length; i++) {
+                    opcoesTurma[i].disabled = false;
+                }
+            }
+        }
+
+        // Evento de mudança no select de função
+        document.getElementById('funcao').addEventListener('change', controlarTurma);
+
+        async function carregarGrafico(funcao = '', turma = '') {
+            try {
+                const response = await fetch(`dados.php?funcao=${funcao}&turma=${turma}`);
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Calcular o total somando todos os valores
+                let total = 0;
+                const labels = Object.keys(data);
+                const valores = Object.values(data);
+                
+                // Somar apenas se não for "Sem dados"
+                if (labels[0] !== "Sem dados") {
+                    total = valores.reduce((acc, curr) => acc + curr, 0);
+                }
+
+                // Atualizar o contador de total
+                atualizarTotal(total);
+
+                if (grafico) {
+                    grafico.destroy();
+                }
+
+                grafico = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Distribuição',
+                            data: valores,
+                            backgroundColor: [
+                                '#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#B5E655'
+                            ],
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            datalabels: {
+                                color: '#fff',
+                                font: {
+                                    weight: 'bold',
+                                    size: 16
+                                },
+                                formatter: (value, context) => {
+                                    if (context.chart.data.labels[context.dataIndex] === "Sem dados") {
+                                        return "0";
+                                    }
+                                    return value;
+                                }
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        size: 14
+                                    },
+                                    color: '#333'
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += context.parsed;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            } catch (error) {
+                console.error("Erro ao carregar o gráfico:", error);
+                if (grafico) grafico.destroy();
+                ctx.font = "20px Inter";
+                ctx.textAlign = "center";
+                ctx.fillText("Erro ao carregar dados.", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                atualizarTotal(0);
+            }
+        }
+
+        document.getElementById('filtroForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const funcao = document.getElementById('funcao').value;
+            const turma = document.getElementById('turma').value;
+            carregarGrafico(funcao, turma);
+        });
+
+        // Inicializa o gráfico e o estado do filtro de turma
+        controlarTurma();
+        carregarGrafico();
+    </script>
+</body>
+</html>
